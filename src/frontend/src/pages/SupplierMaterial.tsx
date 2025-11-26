@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion'
 import { Building2, MapPin, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import NetworkGraph from '@/components/networks/NetworkGraph'
+import SupplyChainMap from '@/components/maps/SupplyChainMap'
 
 export default function SupplierMaterial() {
   return (
@@ -63,13 +65,31 @@ export default function SupplierMaterial() {
           <h2 className="text-lg font-semibold text-foreground mb-4">
             Supplier Network Projection
           </h2>
-          <div className="h-[400px] rounded-lg bg-background border border-border flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Supplier clustering visualization</p>
-              <p className="text-sm">(Community detection)</p>
-            </div>
-          </div>
+          <NetworkGraph
+            nodes={[
+              { id: 's1', label: 'Acme Electronics', type: 'supplier', risk: 'critical' },
+              { id: 's2', label: 'Global Components', type: 'supplier', risk: 'high' },
+              { id: 's3', label: 'Pacific Materials', type: 'supplier', risk: 'medium' },
+              { id: 's4', label: 'Euro Parts', type: 'supplier', risk: 'low' },
+              { id: 's5', label: 'US Components', type: 'supplier', risk: 'low' },
+              { id: 'm1', label: 'Semiconductor IC', type: 'material', risk: 'critical' },
+              { id: 'm2', label: 'PCB Substrate', type: 'material', risk: 'high' },
+              { id: 'm3', label: 'Capacitors', type: 'material', risk: 'medium' },
+              { id: 'm4', label: 'Housing', type: 'material', risk: 'low' },
+            ]}
+            edges={[
+              { source: 's1', target: 'm1', weight: 100 },
+              { source: 's1', target: 'm2', weight: 60 },
+              { source: 's2', target: 'm2', weight: 80 },
+              { source: 's2', target: 'm3', weight: 70 },
+              { source: 's3', target: 'm3', weight: 50 },
+              { source: 's3', target: 'm4', weight: 40 },
+              { source: 's4', target: 'm4', weight: 60 },
+              { source: 's5', target: 'm1', weight: 30 },
+            ]}
+            height="400px"
+            layout="fcose"
+          />
         </div>
 
         {/* Geographic Map */}
@@ -77,13 +97,10 @@ export default function SupplierMaterial() {
           <h2 className="text-lg font-semibold text-foreground mb-4">
             Geographic Concentration
           </h2>
-          <div className="h-[400px] rounded-lg bg-background border border-border flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <MapPin className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Supplier location heatmap</p>
-              <p className="text-sm">(Mapbox integration)</p>
-            </div>
-          </div>
+          <SupplyChainMap
+            height="400px"
+            showFlows={false}
+          />
         </div>
       </div>
 

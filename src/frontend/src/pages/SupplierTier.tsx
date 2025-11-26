@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
-import { Layers, AlertTriangle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
+import TierNetwork from '@/components/networks/TierNetwork'
 
 export default function SupplierTier() {
   return (
@@ -37,13 +38,10 @@ export default function SupplierTier() {
         <h2 className="text-lg font-semibold text-foreground mb-4">
           Multi-Tier Network Visualization
         </h2>
-        <div className="h-[500px] rounded-lg bg-background border border-border flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Layers className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Force-Directed Graph</p>
-            <p className="text-sm">Tier 1 → Tier 2 → Tier 3 hierarchy</p>
-          </div>
-        </div>
+        <TierNetwork
+          height="500px"
+          showHiddenDependencies={true}
+        />
       </div>
 
       {/* Hidden Dependencies */}

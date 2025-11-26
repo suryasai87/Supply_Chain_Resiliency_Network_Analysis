@@ -9,7 +9,8 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react'
-import { cn, formatNumber, formatCurrency, getRiskColor, getRiskLabel } from '@/lib/utils'
+import { cn, formatNumber, formatCurrency } from '@/lib/utils'
+import SupplyChainMap from '@/components/maps/SupplyChainMap'
 
 // Mock data - will be replaced with API calls
 const kpiData = [
@@ -306,18 +307,15 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* Placeholder for Map */}
+      {/* Global Supply Chain Map */}
       <div className="rounded-xl bg-card border border-border p-6">
         <h2 className="text-lg font-semibold text-foreground mb-4">
           Global Supply Chain Map
         </h2>
-        <div className="h-[400px] rounded-lg bg-background border border-border flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Globe className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>Interactive map visualization</p>
-            <p className="text-sm">(Mapbox integration placeholder)</p>
-          </div>
-        </div>
+        <SupplyChainMap
+          height="400px"
+          showFlows={true}
+        />
       </div>
     </motion.div>
   )

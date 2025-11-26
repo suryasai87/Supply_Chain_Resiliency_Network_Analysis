@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Package, Search, Filter, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import BipartiteGraph from '@/components/networks/BipartiteGraph'
 
 // Mock data
 const materials = [
@@ -54,16 +55,11 @@ export default function MaterialPart() {
             Material-Part Bipartite Network
           </h2>
 
-          <div className="h-[500px] rounded-lg bg-background border border-border flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Package className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Bipartite Graph Visualization</p>
-              <p className="text-sm mt-2">
-                Materials on left, Parts on right<br />
-                Edge thickness = quantity relationship
-              </p>
-            </div>
-          </div>
+          <BipartiteGraph
+            height="500px"
+            leftLabel="Materials"
+            rightLabel="Parts"
+          />
         </div>
 
         {/* Material Criticality Ranking */}

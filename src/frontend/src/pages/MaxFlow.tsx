@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Network, Play, Download, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import FlowNetwork from '@/components/networks/FlowNetwork'
 
 export default function MaxFlow() {
   const [source, setSource] = useState('')
@@ -108,25 +109,10 @@ export default function MaxFlow() {
             </button>
           </div>
 
-          <div className="h-[500px] rounded-lg bg-background border border-border flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Network className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Max-Flow Network</p>
-              <p className="text-sm mt-2">
-                Select source and sink nodes to visualize<br />
-                the maximum flow path
-              </p>
-              <div className="mt-4 p-4 rounded-lg bg-card border border-border inline-block text-left">
-                <p className="text-xs font-mono">
-                  <span className="text-brand-teal">// Edmonds-Karp Algorithm</span><br />
-                  <span className="text-foreground">while augmenting_path_exists:</span><br />
-                  <span className="text-muted-foreground ml-4">find_path_bfs(source, sink)</span><br />
-                  <span className="text-muted-foreground ml-4">update_residual_graph()</span><br />
-                  <span className="text-muted-foreground ml-4">max_flow += bottleneck</span>
-                </p>
-              </div>
-            </div>
-          </div>
+          <FlowNetwork
+            height="500px"
+            maxFlow={source && sink ? 5420 : 0}
+          />
         </div>
 
         {/* Analysis Results */}

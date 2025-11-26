@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { DollarSign, Globe, TrendingUp } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
+import TariffChoropleth from '@/components/maps/TariffChoropleth'
 
 export default function TariffMaterial() {
   return (
@@ -48,12 +49,9 @@ export default function TariffMaterial() {
           <h2 className="text-lg font-semibold text-foreground mb-4">
             Tariff Exposure by Country
           </h2>
-          <div className="h-[400px] rounded-lg bg-background border border-border flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Globe className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Choropleth tariff heatmap</p>
-            </div>
-          </div>
+          <TariffChoropleth
+            height="400px"
+          />
         </div>
 
         {/* Scenario Modeling */}

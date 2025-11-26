@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { Truck, Package } from 'lucide-react'
+import { Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import SankeyDiagram from '@/components/charts/SankeyDiagram'
 
 export default function SupplierProduct() {
   return (
@@ -22,13 +23,9 @@ export default function SupplierProduct() {
         <h2 className="text-lg font-semibold text-foreground mb-4">
           Supply Flow Diagram
         </h2>
-        <div className="h-[500px] rounded-lg bg-background border border-border flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Truck className="w-16 h-16 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Sankey Diagram</p>
-            <p className="text-sm">Supplier → Material → Product flow</p>
-          </div>
-        </div>
+        <SankeyDiagram
+          height="500px"
+        />
       </div>
 
       {/* Product Risk Table */}
