@@ -15,8 +15,8 @@ interface SankeyLinkData {
 }
 
 interface SankeyDiagramProps {
-  nodes: SankeyNodeData[]
-  links: SankeyLinkData[]
+  nodes?: SankeyNodeData[]
+  links?: SankeyLinkData[]
   height?: string
   className?: string
   onNodeClick?: (node: SankeyNodeData) => void
@@ -124,7 +124,7 @@ export default function SankeyDiagram({
     // Generate layout
     const sankeyData = sankeyGenerator({
       nodes: nodes.map(n => ({ ...n })),
-      links: sankeyLinks.map(l => ({ ...l }))
+      links: sankeyLinks as any
     })
 
     const g = svg
@@ -148,11 +148,11 @@ export default function SankeyDiagram({
       .attr('stroke-width', (d: D3SankeyLink) => Math.max(1, d.width || 0))
       .style('cursor', 'pointer')
 
-    link.on('mouseover', function(this: SVGPathElement) {
-      d3.select(this).attr('stroke-opacity', 0.7)
+    link.on('mouseover', function() {
+      d3.select(this as SVGPathElement).attr('stroke-opacity', 0.7)
     })
-    link.on('mouseout', function(this: SVGPathElement) {
-      d3.select(this).attr('stroke-opacity', 0.4)
+    link.on('mouseout', function() {
+      d3.select(this as SVGPathElement).attr('stroke-opacity', 0.4)
     })
 
     // Add link titles
@@ -181,11 +181,11 @@ export default function SankeyDiagram({
       .attr('rx', 3)
       .attr('ry', 3)
 
-    node.on('mouseover', function(this: SVGGElement) {
-      d3.select(this).select('rect').attr('stroke', '#333').attr('stroke-width', 2)
+    node.on('mouseover', function() {
+      d3.select(this as SVGGElement).select('rect').attr('stroke', '#333').attr('stroke-width', 2)
     })
-    node.on('mouseout', function(this: SVGGElement) {
-      d3.select(this).select('rect').attr('stroke', '#fff').attr('stroke-width', 1)
+    node.on('mouseout', function() {
+      d3.select(this as SVGGElement).select('rect').attr('stroke', '#fff').attr('stroke-width', 1)
     })
     node.on('click', (_event: MouseEvent, d: D3SankeyNode) => {
       if (onNodeClick) {

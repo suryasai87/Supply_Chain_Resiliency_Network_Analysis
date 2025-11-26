@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import cytoscape, { Core, ElementDefinition, Stylesheet } from 'cytoscape'
+import cytoscape, { Core, ElementDefinition } from 'cytoscape'
+
+type Stylesheet = cytoscape.StylesheetStyle
 
 export interface BipartiteNode {
   id: string
@@ -16,9 +18,9 @@ export interface BipartiteEdge {
 }
 
 interface BipartiteGraphProps {
-  leftNodes: BipartiteNode[]
-  rightNodes: BipartiteNode[]
-  edges: BipartiteEdge[]
+  leftNodes?: BipartiteNode[]
+  rightNodes?: BipartiteNode[]
+  edges?: BipartiteEdge[]
   leftLabel?: string
   rightLabel?: string
   height?: string

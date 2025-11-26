@@ -1,9 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
-import cytoscape, { Core, ElementDefinition, Stylesheet } from 'cytoscape'
+import cytoscape, { Core, ElementDefinition } from 'cytoscape'
+// @ts-ignore
 import fcose from 'cytoscape-fcose'
 
 // Register the fcose layout
 cytoscape.use(fcose)
+
+type Stylesheet = cytoscape.StylesheetStyle
 
 export interface NetworkNode {
   id: string

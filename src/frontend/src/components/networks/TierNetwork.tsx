@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import cytoscape, { Core, ElementDefinition, Stylesheet } from 'cytoscape'
+import cytoscape, { Core, ElementDefinition } from 'cytoscape'
+// @ts-ignore
 import fcose from 'cytoscape-fcose'
 
 cytoscape.use(fcose)
+
+type Stylesheet = cytoscape.StylesheetStyle
 
 export interface TierNode {
   id: string
@@ -19,8 +22,8 @@ export interface TierEdge {
 }
 
 interface TierNetworkProps {
-  nodes: TierNode[]
-  edges: TierEdge[]
+  nodes?: TierNode[]
+  edges?: TierEdge[]
   height?: string
   className?: string
   onNodeClick?: (node: TierNode) => void

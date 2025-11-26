@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react'
-import cytoscape, { Core, ElementDefinition, Stylesheet } from 'cytoscape'
+import cytoscape, { Core, ElementDefinition } from 'cytoscape'
+// @ts-ignore
 import fcose from 'cytoscape-fcose'
 
 cytoscape.use(fcose)
+
+type Stylesheet = cytoscape.StylesheetStyle
 
 export interface FlowNode {
   id: string
@@ -18,8 +21,8 @@ export interface FlowEdge {
 }
 
 interface FlowNetworkProps {
-  nodes: FlowNode[]
-  edges: FlowEdge[]
+  nodes?: FlowNode[]
+  edges?: FlowEdge[]
   maxFlow?: number
   height?: string
   className?: string
