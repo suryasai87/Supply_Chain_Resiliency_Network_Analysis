@@ -1,0 +1,49 @@
+bundle:
+  name: supply-chain-resiliency
+
+workspace:
+  host: https://fe-vm-hls-amer.cloud.databricks.com
+
+variables:
+  catalog:
+    description: Unity Catalog name for supply chain data
+    default: chris_messer
+
+  schema_bronze:
+    description: Bronze schema name
+    default: bronze
+
+  schema_silver:
+    description: Silver schema name
+    default: silver
+
+  schema_gold:
+    description: Gold schema name
+    default: gold
+
+  multi_agent_endpoint:
+    description: Multi-Agent Supervisor endpoint
+    default: supply-chain-analysis-mas
+
+  knowledge_assistant:
+    description: Knowledge Assistant endpoint
+    default: supplytics-knowledge-assistant
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev
+
+  staging:
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/staging
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Applications/${bundle.name}

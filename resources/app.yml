@@ -1,0 +1,6 @@
+resources:
+  apps:
+    supply-chain-resiliency:
+      name: supply-chain-resiliency
+      description: "Supply Chain Resiliency Application with Network Analysis, Tariff Risk, and AI-powered insights"
+      source_code_path: ${workspace.file_path}/app
