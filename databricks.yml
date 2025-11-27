@@ -9,17 +9,25 @@ variables:
     description: Unity Catalog name for supply chain data
     default: chris_messer
 
+  schema:
+    description: Schema name for all supply chain tables
+    default: supply_chain_network
+
   schema_bronze:
-    description: Bronze schema name
+    description: Bronze schema name (legacy - use schema instead)
     default: bronze
 
   schema_silver:
-    description: Silver schema name
+    description: Silver schema name (legacy - use schema instead)
     default: silver
 
   schema_gold:
-    description: Gold schema name
+    description: Gold schema name (legacy - use schema instead)
     default: gold
+
+  warehouse_id:
+    description: SQL Warehouse ID for queries
+    default: ""
 
   multi_agent_endpoint:
     description: Multi-Agent Supervisor endpoint
@@ -37,13 +45,22 @@ targets:
     mode: development
     workspace:
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev
+    variables:
+      catalog: supply_chain_dev
+      schema: network_analysis_dev
 
   staging:
     mode: development
     workspace:
       root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/staging
+    variables:
+      catalog: supply_chain_staging
+      schema: network_analysis_staging
 
   prod:
     mode: production
     workspace:
       root_path: /Workspace/Applications/${bundle.name}
+    variables:
+      catalog: supply_chain_prod
+      schema: network_analysis

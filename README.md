@@ -2,6 +2,10 @@
 
 A comprehensive supply chain risk management platform with network analysis, tariff risk overlay, and AI-powered insights. Built on Databricks with Multi-Agent Supervisor, Knowledge Assistant, and Genie Spaces integration.
 
+**Live Demo:** https://supply-chain-resiliency-1602460480284688.aws.databricksapps.com
+
+**GitHub:** https://github.com/suryasai87/Supply_Chain_Resiliency_Network_Analysis
+
 ## Quick Deploy
 
 ```bash
@@ -157,6 +161,149 @@ Competing with:
 3. SQL-native graph analytics (recursive CTEs)
 4. Multi-Agent AI with domain experts
 5. Customizable & cost-effective
+
+## Data Model & Deployment Guide
+
+This application uses a **Medallion Architecture** (Bronze → Silver → Gold) for supply chain network data.
+
+### Data Model Overview
+
+```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   BRONZE     │───▶│   SILVER     │───▶│    GOLD      │
+│  Raw Data    │    │  Graph-Ready │    │  Analytics   │
+└──────────────┘    └──────────────┘    └──────────────┘
+```
+
+**Bronze Layer (10 tables):**
+- `bronze_dim_supplier` - Supplier master data with risk scores
+- `bronze_dim_material` - Material/component data with HS codes
+- `bronze_dim_product` - Finished goods catalog
+- `bronze_dim_customer` - Customer master data
+- `bronze_dim_tariff` - Tariff rates by country/HS code
+- `bronze_fact_supplier_material` - Supplier-material relationships
+- `bronze_fact_material_product` - Bill of materials (BOM)
+- `bronze_fact_product_customer` - Sales relationships
+- `bronze_fact_supplier_supplier` - Multi-tier supplier relationships
+
+**Silver Layer (9 tables):**
+- `silver_graph_nodes` - Unified graph nodes (all entity types)
+- `silver_graph_edges` - Unified graph edges (all relationship types)
+- `silver_node_supplier/material/product/customer` - Type-specific nodes
+- `silver_edge_*` - Type-specific edges with flow attributes
+
+**Gold Layer (8 tables):**
+- `gold_metrics_node` - Centrality metrics (PageRank, betweenness)
+- `gold_metrics_edge` - Edge-level flow metrics
+- `gold_maxflow_results` - Max-flow analysis results
+- `gold_supplier_tier_analysis` - Hidden dependency analysis
+- `gold_tariff_material/country_impact` - Tariff exposure
+- `gold_supply_chain_health` - Daily health metrics
+- `gold_risk_alerts` - Actionable alerts
+
+### Deploy Your Own Instance
+
+#### Prerequisites
+- Databricks workspace with Unity Catalog enabled
+- Databricks CLI installed and configured
+- Python 3.9+, Node.js 18+
+
+#### Step 1: Clone and Configure
+
+```bash
+git clone https://github.com/suryasai87/Supply_Chain_Resiliency_Network_Analysis.git
+cd Supply_Chain_Resiliency_Network_Analysis
+```
+
+Edit `databricks.yml` to set your catalog:
+```yaml
+variables:
+  catalog:
+    default: your_catalog_name
+  schema:
+    default: supply_chain_network
+```
+
+#### Step 2: Create Tables (Option A - DAB)
+
+```bash
+# Deploy with Databricks Asset Bundles
+databricks bundle deploy --target dev
+
+# Run the table creation job
+databricks bundle run create_tables_job --target dev
+```
+
+#### Step 2: Create Tables (Option B - Manual)
+
+Run the DDL scripts in Databricks SQL:
+```sql
+-- Set your catalog/schema
+SET var.catalog = your_catalog;
+SET var.schema = supply_chain_network;
+
+-- Run in order:
+-- 1. docs/data-model/01_bronze_layer_ddl.sql
+-- 2. docs/data-model/02_silver_layer_ddl.sql
+-- 3. docs/data-model/03_gold_layer_ddl.sql
+-- 4. docs/data-model/04_sample_data.sql
+```
+
+#### Step 3: Configure Environment
+
+Create `src/backend/.env`:
+```env
+DATABRICKS_SERVER_HOSTNAME=your-workspace.cloud.databricks.com
+DATABRICKS_TOKEN=your-token
+DATABRICKS_WAREHOUSE_ID=your-warehouse-id
+UNITY_CATALOG=your_catalog
+UNITY_SCHEMA=supply_chain_network
+MULTI_AGENT_ENDPOINT=supply-chain-analysis-mas
+KNOWLEDGE_ENDPOINT=supplytics-knowledge-assistant
+```
+
+#### Step 4: Deploy Application
+
+```bash
+# Build and deploy
+python deploy.py dev
+```
+
+### Hydrating Your Own Data
+
+To use your own supply chain data:
+
+1. **Map your data** to the Bronze layer schema (see `docs/data-model/01_bronze_layer_ddl.sql`)
+2. **Load Bronze tables** via Databricks SQL, Spark, or Auto Loader
+3. **Run Silver transformations** - Copy nodes/edges to graph tables:
+   ```sql
+   -- Example: Create supplier nodes
+   INSERT INTO silver_graph_nodes
+   SELECT supplier_id, 'supplier', supplier_name, ...
+   FROM bronze_dim_supplier;
+   ```
+4. **Compute Gold metrics** - Run notebook `05_compute_graph_metrics.py`
+5. **Schedule daily refresh** - Enable the `graph_metrics_refresh` job
+
+### Graph Visualizations
+
+| Page | Visualization | Data Source |
+|------|---------------|-------------|
+| Overview | Supply Chain Map | `silver_graph_nodes` (suppliers with lat/lng) |
+| Max-Flow | Flow Network | `silver_graph_edges` with flow_capacity |
+| Material-Part | Bipartite Graph | `silver_node_material` + `silver_node_product` |
+| Supplier-Material | Network + Map | `silver_graph_nodes/edges` |
+| Tariff-Material | Choropleth Map | `gold_tariff_country_impact` |
+| Supplier-Product | Sankey Diagram | `silver_graph_edges` (full chain) |
+| Supplier Tier | Tier Network | `silver_edge_supplier_supplier` |
+
+### Documentation
+
+- [Data Model Documentation](docs/data-model/DATA_MODEL.md) - ER diagrams and table definitions
+- [Bronze Layer DDL](docs/data-model/01_bronze_layer_ddl.sql) - Raw data tables
+- [Silver Layer DDL](docs/data-model/02_silver_layer_ddl.sql) - Graph structures
+- [Gold Layer DDL](docs/data-model/03_gold_layer_ddl.sql) - Analytics tables
+- [Sample Data](docs/data-model/04_sample_data.sql) - Demo data
 
 ## License
 

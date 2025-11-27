@@ -1,0 +1,100 @@
+resources:
+  # Schema resource for Unity Catalog
+  schemas:
+    supply_chain_schema:
+      name: ${var.schema}
+      catalog_name: ${var.catalog}
+      comment: "Supply Chain Resiliency Network Analysis - Tables for graph visualization and analytics"
+
+  # Job to create all tables and populate sample data
+  jobs:
+    create_tables_job:
+      name: "[${bundle.name}] Create Tables and Sample Data"
+      description: "Creates Bronze, Silver, and Gold layer tables for Supply Chain Network Analysis"
+      tasks:
+        - task_key: create_bronze_tables
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/01_create_bronze_tables
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+
+        - task_key: create_silver_tables
+          depends_on:
+            - task_key: create_bronze_tables
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/02_create_silver_tables
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+
+        - task_key: create_gold_tables
+          depends_on:
+            - task_key: create_silver_tables
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/03_create_gold_tables
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+
+        - task_key: populate_sample_data
+          depends_on:
+            - task_key: create_gold_tables
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/04_populate_sample_data
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+
+    # Daily graph metrics refresh job
+    graph_metrics_refresh:
+      name: "[${bundle.name}] Daily Graph Metrics Refresh"
+      description: "Computes graph centrality metrics and updates Gold layer tables"
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: "UTC"
+      tasks:
+        - task_key: compute_graph_metrics
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/05_compute_graph_metrics
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+            init_scripts:
+              - workspace:
+                  destination: ${workspace.file_path}/init_scripts/install_networkx.sh
