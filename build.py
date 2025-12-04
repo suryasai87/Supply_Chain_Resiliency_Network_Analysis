@@ -83,26 +83,18 @@ def main():
         print("  Warning: Frontend dist not found, creating empty static dir")
         static_dir.mkdir(exist_ok=True)
 
-    # Create app.yaml for Databricks Apps
-    print("\n[5/5] Creating app.yaml...")
-    app_yaml_content = """command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    # Copy app.yaml from repository root
+    print("\n[5/5] Copying app.yaml...")
+    app_yaml_src = project_root / "app.yaml"
+    app_yaml_dst = app_dir / "app.yaml"
 
-env:
-  - name: ENV
-    value: "production"
-  - name: PORT
-    value: "8000"
-  - name: DEBUG
-    value: "False"
-  - name: MULTI_AGENT_ENDPOINT
-    value: "supply-chain-analysis-mas"
-  - name: KNOWLEDGE_ENDPOINT
-    value: "supplytics-knowledge-assistant"
-"""
-
-    with open(app_dir / "app.yaml", "w") as f:
-        f.write(app_yaml_content)
-    print("  app.yaml created")
+    if app_yaml_src.exists():
+        shutil.copy2(app_yaml_src, app_yaml_dst)
+        print(f"  Copied app.yaml from repository root")
+    else:
+        print("  ERROR: app.yaml not found in repository root!")
+        print("  Please create app.yaml with your Databricks Apps configuration")
+        sys.exit(1)
 
     # Print summary
     print("\n" + "=" * 60)

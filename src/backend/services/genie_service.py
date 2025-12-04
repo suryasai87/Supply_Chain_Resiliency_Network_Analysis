@@ -43,27 +43,37 @@ class GenieService:
     """Service for interacting with Databricks Genie Spaces"""
 
     def __init__(self):
-        self.databricks_host = os.getenv("DATABRICKS_HOST", "")
-        self.databricks_token = os.getenv("DATABRICKS_TOKEN", "")
         self.sql_warehouse_id = os.getenv("SQL_WAREHOUSE_ID", "")
         self._workspace_client = None
+        self._auth_checked = False
+
+        # Check for explicit token (local dev) or SDK auto-auth (Databricks Apps)
+        self.databricks_token = os.getenv("DATABRICKS_TOKEN", "")
+        self.databricks_host = os.getenv("DATABRICKS_HOST", "")
 
         if self.databricks_token:
-            logger.info(f"GenieService initialized for: {self.databricks_host}")
+            logger.info(f"GenieService initialized with explicit token for: {self.databricks_host}")
         else:
-            logger.warning("No DATABRICKS_TOKEN - Genie will use mock responses")
+            logger.info("GenieService will attempt SDK auto-auth (Databricks Apps runtime)")
 
     @property
     def workspace_client(self):
-        """Lazy initialization of WorkspaceClient"""
-        if self._workspace_client is None and self.databricks_token:
+        """Lazy initialization of WorkspaceClient - works with token or SDK auto-auth"""
+        if self._workspace_client is None:
             try:
                 from databricks.sdk import WorkspaceClient
-                self._workspace_client = WorkspaceClient(
-                    host=self.databricks_host,
-                    token=self.databricks_token
-                )
-                logger.info("WorkspaceClient initialized successfully")
+
+                # If explicit token is provided, use it; otherwise SDK auto-detects
+                if self.databricks_token and self.databricks_host:
+                    self._workspace_client = WorkspaceClient(
+                        host=self.databricks_host,
+                        token=self.databricks_token
+                    )
+                    logger.info("WorkspaceClient initialized with explicit credentials")
+                else:
+                    # In Databricks Apps, this auto-detects authentication
+                    self._workspace_client = WorkspaceClient()
+                    logger.info("WorkspaceClient initialized with auto-detected credentials")
             except Exception as e:
                 logger.error(f"Failed to initialize WorkspaceClient: {e}")
         return self._workspace_client

@@ -1,12 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Maximize2, Minimize2, Send, Loader2, Bot, User, ChevronDown, Database, BarChart3 } from 'lucide-react'
+import { X, Maximize2, Minimize2, Send, Loader2, Bot, User, ChevronDown, ChevronRight, Database, BarChart3, Cpu, Wrench, MessageSquare, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import DataVisualization from './DataVisualization'
 
 interface AIAssistantProps {
   isOpen: boolean
   onClose: () => void
+}
+
+interface TraceStep {
+  type: string
+  name?: string
+  agent?: string
+  content?: string
+  input?: Record<string, unknown>
+  tool_use_id?: string
+  id?: string
 }
 
 interface Message {
@@ -21,6 +31,7 @@ interface Message {
     rows: unknown[][]
     row_count?: number
   }
+  trace?: TraceStep[]
 }
 
 interface GenieSpace {
@@ -42,8 +53,21 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
   const [selectedSpace, setSelectedSpace] = useState<string>('global_supply_chain')
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [showSpaceDropdown, setShowSpaceDropdown] = useState(false)
+  const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const toggleTrace = (messageId: string) => {
+    setExpandedTraces(prev => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }
 
   const tabs = [
     { id: 'multi-agent' as const, label: 'Multi-Agent', description: 'Complex analysis' },
@@ -181,7 +205,38 @@ What data would you like to explore?`
         body: JSON.stringify(body)
       })
 
-      const data = await response.json()
+      // Get response text first to handle non-JSON responses (like timeout errors)
+      const responseText = await response.text()
+
+      // Check for timeout error (Databricks returns plain text "upstream request timeout")
+      if (responseText.includes('upstream request timeout') || responseText.includes('timeout')) {
+        const timeoutMessage: Message = {
+          id: `timeout-${Date.now()}`,
+          role: 'assistant',
+          content: `⏱️ **Request Timed Out**\n\nThe AI agent is taking longer than expected to respond. This can happen when:\n\n- Complex analysis is being performed\n- Multiple data sources are being queried\n- The agent is processing a large amount of data\n\n**Suggestions:**\n- Try a simpler or more specific question\n- Break your question into smaller parts\n- Try again in a few moments`,
+          source: 'timeout',
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, timeoutMessage])
+        return
+      }
+
+      // Try to parse JSON
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch {
+        // If JSON parsing fails, handle gracefully
+        const errorMessage: Message = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: `⚠️ **Unexpected Response**\n\nReceived an unexpected response from the server. Please try again.\n\n_Technical details: Response was not valid JSON_`,
+          source: 'error',
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, errorMessage])
+        return
+      }
 
       let assistantMessage: Message
 
@@ -206,16 +261,30 @@ What data would you like to explore?`
           role: 'assistant',
           content: data.content || data.message || 'No response received',
           source: data.source || activeTab,
-          timestamp: new Date()
+          timestamp: new Date(),
+          trace: data.trace  // Include trace data for thinking display
         }
       }
 
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
+      // Handle network errors, timeouts, etc.
+      let errorContent = 'An unexpected error occurred. Please try again.'
+
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+          errorContent = `⏱️ **Request Timed Out**\n\nThe request took too long to complete. Please try a simpler query or try again later.`
+        } else if (error.message.includes('network') || error.message.includes('Network')) {
+          errorContent = `🌐 **Network Error**\n\nUnable to connect to the server. Please check your connection and try again.`
+        } else {
+          errorContent = `⚠️ **Error**\n\n${error.message}`
+        }
+      }
+
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+        content: errorContent,
         source: 'error',
         timestamp: new Date()
       }
@@ -328,6 +397,83 @@ What data would you like to explore?`
              value.toLocaleString()
     }
     return String(value)
+  }
+
+  const renderTraceStep = (step: TraceStep, index: number) => {
+    const getIcon = () => {
+      switch (step.type) {
+        case 'tool_call':
+          return <Wrench className="w-3 h-3 text-blue-500" />
+        case 'tool_result':
+          return <Database className="w-3 h-3 text-green-500" />
+        case 'reasoning':
+          return <Cpu className="w-3 h-3 text-purple-500" />
+        case 'agent_handoff':
+          return <ArrowRight className="w-3 h-3 text-orange-500" />
+        default:
+          return <MessageSquare className="w-3 h-3 text-gray-500" />
+      }
+    }
+
+    const getLabel = () => {
+      switch (step.type) {
+        case 'tool_call':
+          return `Calling: ${step.name || 'tool'}`
+        case 'tool_result':
+          return 'Tool Result'
+        case 'reasoning':
+          return 'Thinking'
+        case 'agent_handoff':
+          return `Handoff to: ${step.agent || 'agent'}`
+        default:
+          return step.type
+      }
+    }
+
+    return (
+      <div key={index} className="flex items-start gap-2 py-1">
+        <div className="mt-0.5">{getIcon()}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-medium text-muted-foreground">{getLabel()}</div>
+          {step.content && (
+            <div className="text-xs text-muted-foreground/70 truncate">{step.content}</div>
+          )}
+          {step.input && (
+            <pre className="text-xs text-muted-foreground/70 mt-1 overflow-x-auto max-h-20">
+              {JSON.stringify(step.input, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const renderTrace = (messageId: string, trace: TraceStep[]) => {
+    if (!trace || trace.length === 0) return null
+
+    const isExpanded = expandedTraces.has(messageId)
+
+    return (
+      <div className="mt-3 border border-border rounded-lg overflow-hidden">
+        <button
+          onClick={() => toggleTrace(messageId)}
+          className="w-full px-3 py-2 bg-muted/50 flex items-center gap-2 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+        >
+          {isExpanded ? (
+            <ChevronDown className="w-3 h-3" />
+          ) : (
+            <ChevronRight className="w-3 h-3" />
+          )}
+          <Cpu className="w-3 h-3" />
+          Agent Thinking ({trace.length} steps)
+        </button>
+        {isExpanded && (
+          <div className="px-3 py-2 bg-background space-y-1 max-h-60 overflow-y-auto">
+            {trace.map((step, i) => renderTraceStep(step, i))}
+          </div>
+        )}
+      </div>
+    )
   }
 
   const currentSpace = genieSpaces.find(s => s.key === selectedSpace)
@@ -491,6 +637,7 @@ What data would you like to explore?`
                             rows={message.results.rows}
                           />
                         )}
+                        {message.trace && renderTrace(message.id, message.trace)}
                       </div>
                     ) : (
                       <p>{message.content}</p>
