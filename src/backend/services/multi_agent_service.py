@@ -4,7 +4,7 @@ import os
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 import httpx
 from dotenv import load_dotenv
 
@@ -189,6 +189,181 @@ class MultiAgentService:
         except Exception as e:
             logger.error(f"Error calling multi-agent endpoint: {e}")
             return self._get_mock_response(messages)
+
+    async def query_stream(self, messages: List[Dict[str, str]], max_tokens: int = 512) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Stream Multi-Agent Supervisor response with real-time thinking updates.
+        Yields trace events as they happen, then the final response.
+        """
+        # Yield initial "thinking started" event immediately
+        yield {
+            "type": "trace",
+            "step": {
+                "type": "info",
+                "name": "Starting Analysis",
+                "content": "Connecting to Multi-Agent Supervisor..."
+            }
+        }
+
+        if self._auth_mode is None:
+            yield {
+                "type": "trace",
+                "step": {
+                    "type": "info",
+                    "name": "Auth Status",
+                    "content": "No authentication available, using mock mode"
+                }
+            }
+            mock_response = self._get_mock_response(messages)
+            yield {
+                "type": "response",
+                "role": "assistant",
+                "content": mock_response["content"],
+                "source": mock_response["source"]
+            }
+            return
+
+        # Simulate thinking steps while waiting for the actual response
+        thinking_steps = [
+            {"type": "reasoning", "name": "Understanding Query", "content": "Analyzing your question..."},
+            {"type": "agent", "name": "Agent Routing", "content": "Determining which agents to involve..."},
+            {"type": "tool_call", "name": "Data Retrieval", "content": "Querying supply chain data..."},
+        ]
+
+        # Yield initial thinking step
+        yield {
+            "type": "trace",
+            "step": thinking_steps[0]
+        }
+
+        try:
+            if self._auth_mode == "sdk" and self._workspace_client:
+                # Start the async request
+                loop = asyncio.get_event_loop()
+
+                # Yield second thinking step
+                yield {
+                    "type": "trace",
+                    "step": thinking_steps[1]
+                }
+
+                # Run the actual query in executor
+                result_future = loop.run_in_executor(
+                    _executor,
+                    self._sync_query_endpoint,
+                    self.multi_agent_endpoint,
+                    messages,
+                    max_tokens,
+                    True  # return_trace=True
+                )
+
+                # Yield third thinking step
+                yield {
+                    "type": "trace",
+                    "step": thinking_steps[2]
+                }
+
+                # Wait for result
+                result = await result_future
+
+                # Extract and yield trace data from the response
+                trace = self._extract_trace(result)
+                if trace:
+                    yield {
+                        "type": "trace",
+                        "step": {
+                            "type": "info",
+                            "name": "Analysis Complete",
+                            "content": f"Processed {len(trace)} steps"
+                        }
+                    }
+                    # Yield each trace step
+                    for step in trace:
+                        yield {
+                            "type": "trace",
+                            "step": step
+                        }
+
+                # Extract and yield final response
+                content = self._extract_content(result)
+                yield {
+                    "type": "response",
+                    "role": "assistant",
+                    "content": content,
+                    "source": "multi_agent_supervisor",
+                    "trace": trace
+                }
+
+            else:
+                # Use httpx with explicit token (local development)
+                url = f"{self.databricks_host}/serving-endpoints/{self.multi_agent_endpoint}/invocations"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.databricks_token}"
+                }
+                payload = {
+                    "input": messages,
+                    "max_output_tokens": max_tokens,
+                    "databricks_options": {"return_trace": True}
+                }
+
+                yield {
+                    "type": "trace",
+                    "step": thinking_steps[1]
+                }
+
+                async with httpx.AsyncClient(timeout=600.0) as client:
+                    yield {
+                        "type": "trace",
+                        "step": thinking_steps[2]
+                    }
+
+                    response = await client.post(url, json=payload, headers=headers)
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        trace = self._extract_trace(result)
+
+                        if trace:
+                            yield {
+                                "type": "trace",
+                                "step": {
+                                    "type": "info",
+                                    "name": "Analysis Complete",
+                                    "content": f"Processed {len(trace)} steps"
+                                }
+                            }
+                            for step in trace:
+                                yield {
+                                    "type": "trace",
+                                    "step": step
+                                }
+
+                        content = self._extract_content(result)
+                        yield {
+                            "type": "response",
+                            "role": "assistant",
+                            "content": content,
+                            "source": "multi_agent_supervisor",
+                            "trace": trace
+                        }
+                    else:
+                        yield {
+                            "type": "error",
+                            "content": f"API error: {response.status_code}"
+                        }
+
+        except httpx.TimeoutException:
+            yield {
+                "type": "error",
+                "content": "Request timed out. The agent is taking longer than expected."
+            }
+        except Exception as e:
+            logger.error(f"Error in streaming query: {e}")
+            yield {
+                "type": "error",
+                "content": str(e)
+            }
 
     async def query_knowledge(self, messages: List[Dict[str, str]], max_tokens: int = 512) -> Dict[str, Any]:
         """

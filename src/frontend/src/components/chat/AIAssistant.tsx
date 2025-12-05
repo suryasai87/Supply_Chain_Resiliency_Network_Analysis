@@ -54,6 +54,8 @@ export default function AIAssistant({ isOpen, onClose }: AIAssistantProps) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [showSpaceDropdown, setShowSpaceDropdown] = useState(false)
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set())
+  const [liveTrace, setLiveTrace] = useState<TraceStep[]>([])
+  const [isStreaming, setIsStreaming] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -173,6 +175,12 @@ What data would you like to explore?`
     setIsLoading(true)
 
     try {
+      // Use streaming for multi-agent tab
+      if (activeTab === 'multi-agent') {
+        await sendStreamingMessage(userMessage)
+        return
+      }
+
       let endpoint: string
       let body: Record<string, unknown>
 
@@ -183,15 +191,8 @@ What data would you like to explore?`
           space_key: selectedSpace,
           conversation_id: conversationId
         }
-      } else if (activeTab === 'knowledge') {
-        endpoint = '/api/chat/knowledge'
-        const apiMessages = messages
-          .filter(m => m.id !== 'welcome')
-          .concat(userMessage)
-          .map(m => ({ role: m.role, content: m.content }))
-        body = { messages: apiMessages, max_tokens: 1024 }
       } else {
-        endpoint = '/api/chat/multi-agent'
+        endpoint = '/api/chat/knowledge'
         const apiMessages = messages
           .filter(m => m.id !== 'welcome')
           .concat(userMessage)
@@ -294,6 +295,107 @@ What data would you like to explore?`
     }
   }
 
+  const sendStreamingMessage = async (userMessage: Message) => {
+    setIsStreaming(true)
+    setLiveTrace([])
+
+    const apiMessages = messages
+      .filter(m => m.id !== 'welcome')
+      .concat(userMessage)
+      .map(m => ({ role: m.role, content: m.content }))
+
+    try {
+      const response = await fetch('/api/chat/multi-agent/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: apiMessages, max_tokens: 1024 })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalResponse: Message | null = null
+      const collectedTrace: TraceStep[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete SSE messages
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'trace' && data.step) {
+                // Add trace step to live display
+                collectedTrace.push(data.step)
+                setLiveTrace([...collectedTrace])
+              } else if (data.type === 'response') {
+                // Final response received
+                finalResponse = {
+                  id: `assistant-${Date.now()}`,
+                  role: 'assistant',
+                  content: data.content || 'No response received',
+                  source: data.source || 'multi_agent_supervisor',
+                  timestamp: new Date(),
+                  trace: data.trace || collectedTrace
+                }
+              } else if (data.type === 'error') {
+                finalResponse = {
+                  id: `error-${Date.now()}`,
+                  role: 'assistant',
+                  content: `⚠️ **Error**\n\n${data.content}`,
+                  source: 'error',
+                  timestamp: new Date()
+                }
+              } else if (data.type === 'done') {
+                // Stream complete
+                break
+              }
+            } catch {
+              // Ignore JSON parse errors for incomplete messages
+            }
+          }
+        }
+      }
+
+      // Add final message to chat
+      if (finalResponse) {
+        setMessages(prev => [...prev, finalResponse!])
+        // Auto-expand the trace for the new message
+        setExpandedTraces(prev => new Set([...prev, finalResponse!.id]))
+      }
+
+    } catch (error) {
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: `⚠️ **Streaming Error**\n\n${error instanceof Error ? error.message : 'Unknown error'}`,
+        source: 'error',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsStreaming(false)
+      setLiveTrace([])
+      setIsLoading(false)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -302,35 +404,114 @@ What data would you like to explore?`
   }
 
   const renderMarkdown = (content: string) => {
-    return content
-      .split('\n')
-      .map((line, i) => {
-        if (line.startsWith('## ')) {
-          return <h2 key={i} className="text-base font-bold mt-3 mb-1">{line.slice(3)}</h2>
-        }
-        if (line.startsWith('### ')) {
-          return <h3 key={i} className="text-sm font-semibold mt-2 mb-1">{line.slice(4)}</h3>
-        }
-        if (line.startsWith('```')) {
-          return null
-        }
+    const processInlineMarkdown = (text: string): string => {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-foreground">$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-muted text-xs font-mono text-brand-teal">$1</code>')
+    }
 
-        let processed = line
-          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-          .replace(/^- /, '• ')
+    // Pre-process: merge orphan bullets with their content on the next line
+    const lines = content.split('\n')
+    const mergedLines: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // Check if this is an orphan bullet (just "•" or "-" with nothing after)
+      if (line.match(/^[\-•]\s*$/) && i + 1 < lines.length) {
+        // Merge with next line
+        mergedLines.push(`• ${lines[i + 1].trim()}`)
+        i++ // Skip the next line since we merged it
+      } else {
+        mergedLines.push(line)
+      }
+    }
 
-        if (line.trim() === '') {
-          return <br key={i} />
-        }
-
+    return mergedLines.map((line, i) => {
+      // Handle ## headings
+      if (line.startsWith('## ')) {
         return (
-          <p
-            key={i}
-            className="leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: processed }}
-          />
+          <h2 key={i} className="text-base font-bold mt-4 mb-2 pb-1 border-b border-border text-foreground">
+            {line.slice(3)}
+          </h2>
         )
-      })
+      }
+
+      // Handle ### headings
+      if (line.startsWith('### ')) {
+        return (
+          <h3 key={i} className="text-sm font-semibold mt-3 mb-1 text-foreground flex items-center gap-2">
+            <span className="w-1 h-3 bg-brand-teal rounded-full" />
+            {line.slice(4)}
+          </h3>
+        )
+      }
+
+      // Handle code blocks
+      if (line.startsWith('```')) {
+        return null
+      }
+
+      // Handle bold-only lines as section headers
+      const boldLineMatch = line.match(/^\*\*([^*]+)\*\*$/)
+      if (boldLineMatch) {
+        return (
+          <div key={i} className="mt-3 mb-2 px-3 py-2 bg-brand-teal/10 rounded-lg border-l-2 border-brand-teal">
+            <span className="font-semibold text-sm text-foreground">{boldLineMatch[1]}</span>
+          </div>
+        )
+      }
+
+      // Handle numbered bold items (e.g., "**1. Title**")
+      const numberedBoldMatch = line.match(/^\*\*(\d+)\.\s+(.+?)\*\*(.*)$/)
+      if (numberedBoldMatch) {
+        const num = numberedBoldMatch[1]
+        const title = numberedBoldMatch[2]
+        const rest = numberedBoldMatch[3] || ''
+        return (
+          <div key={i} className="mt-2 mb-1 flex items-start gap-2">
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-teal/20 text-brand-teal text-xs font-bold flex items-center justify-center mt-0.5">
+              {num}
+            </span>
+            <div className="flex-1">
+              <span className="font-semibold text-sm text-foreground">{title}</span>
+              {rest && (
+                <span
+                  className="text-sm text-muted-foreground ml-1"
+                  dangerouslySetInnerHTML={{ __html: processInlineMarkdown(rest) }}
+                />
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      // Handle bullet points
+      if (line.match(/^[\-•]\s/)) {
+        const content = line.replace(/^[\-•]\s/, '')
+        return (
+          <div key={i} className="flex items-start gap-3 py-1 pl-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-teal mt-2 flex-shrink-0" />
+            <span
+              className="flex-1 text-sm leading-relaxed text-muted-foreground"
+              dangerouslySetInnerHTML={{ __html: processInlineMarkdown(content) }}
+            />
+          </div>
+        )
+      }
+
+      // Handle empty lines
+      if (line.trim() === '') {
+        return <div key={i} className="h-2" />
+      }
+
+      // Regular paragraph with inline markdown
+      return (
+        <p
+          key={i}
+          className="text-sm leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: processInlineMarkdown(line) }}
+        />
+      )
+    })
   }
 
   const renderSqlBlock = (sql: string) => (
@@ -646,19 +827,32 @@ What data would you like to explore?`
                 </div>
               ))}
 
-              {/* Loading indicator */}
+              {/* Loading indicator with live trace */}
               {isLoading && (
                 <div className="flex gap-3">
                   <div className="w-8 h-8 rounded-full bg-brand-teal/20 flex items-center justify-center flex-shrink-0">
                     <Bot className="w-4 h-4 text-brand-teal" />
                   </div>
                   <div className="flex-1 p-3 rounded-lg bg-accent text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>
                         {activeTab === 'genie' ? 'Generating SQL and querying data...' : 'Analyzing your supply chain data...'}
                       </span>
                     </div>
+
+                    {/* Live trace display during streaming */}
+                    {isStreaming && liveTrace.length > 0 && (
+                      <div className="mt-2 border border-border rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 bg-muted/50 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                          <Cpu className="w-3 h-3 animate-pulse" />
+                          Agent Thinking ({liveTrace.length} steps)
+                        </div>
+                        <div className="px-3 py-2 bg-background space-y-1 max-h-40 overflow-y-auto">
+                          {liveTrace.map((step, i) => renderTraceStep(step, i))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
