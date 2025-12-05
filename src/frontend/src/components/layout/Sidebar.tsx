@@ -12,7 +12,8 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Activity
+  Activity,
+  Database
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/tariff-material', icon: DollarSign, label: 'Tariff-Material' },
   { path: '/supplier-product', icon: Truck, label: 'Supplier-Product' },
   { path: '/supplier-tier', icon: Layers, label: 'Multi-Tier Network' },
+  { path: '/neo4j-graph', icon: Database, label: 'Neo4j Graph' },
   { path: '/recommendations', icon: Lightbulb, label: 'Recommendations' },
   { path: '/executive-briefing', icon: FileText, label: 'Executive Briefing' },
 ]

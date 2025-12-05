@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from routers import auth, network, analysis, chat, genie
+from routers import auth, network, analysis, chat, genie, neo4j
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +36,7 @@ app.include_router(network.router, prefix="/api/network", tags=["Network Data"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(chat.router, prefix="/api/chat", tags=["AI Chat"])
 app.include_router(genie.router, prefix="/api/genie", tags=["Genie Spaces"])
+app.include_router(neo4j.router, prefix="/api/neo4j", tags=["Neo4j"])
 
 
 @app.get("/api/health")

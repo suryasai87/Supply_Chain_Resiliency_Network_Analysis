@@ -47,3 +47,17 @@ targets:
     mode: production
     workspace:
       root_path: /Workspace/Applications/${bundle.name}
+
+  neo4j-dev:
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/supply-chain-neo4j/dev
+    variables:
+      app_config_file: app-neo4j.yaml
+
+  neo4j-prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Applications/supply-chain-neo4j
+    variables:
+      app_config_file: app-neo4j.yaml

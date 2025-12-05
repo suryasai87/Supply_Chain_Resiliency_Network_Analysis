@@ -1,0 +1,119 @@
+# Databricks Apps Configuration
+# Supply Chain Resiliency with Neo4j Integration
+
+name: supply-chain-neo4j
+version: 1.0.0
+
+# Application runtime
+runtime:
+  type: custom
+
+# Compute Resources
+compute:
+  size: LARGE
+
+# Resource Bindings - Grant app access to AI endpoints, Genie spaces, and secrets
+resources:
+  # Multi-Agent Supervisor endpoint
+  - name: multi-agent-endpoint
+    serving_endpoint:
+      endpoint_name: mas-0ad68bad-endpoint
+      permission: CAN_QUERY
+
+  # Knowledge Assistant endpoint
+  - name: knowledge-endpoint
+    serving_endpoint:
+      endpoint_name: ka-0445f231-endpoint
+      permission: CAN_QUERY
+
+  # Genie Spaces - Supply Chain Analytics
+  - name: genie-global-supply-chain
+    genie_space:
+      space_id: supplytics_global_supply_chain
+      permission: CAN_QUERY
+
+  - name: genie-supplier-material
+    genie_space:
+      space_id: supplytics_supplier_material
+      permission: CAN_QUERY
+
+  - name: genie-product-customer
+    genie_space:
+      space_id: supplytics_product_customer
+      permission: CAN_QUERY
+
+  - name: genie-tariff-material
+    genie_space:
+      space_id: supplytics_tariffmaterial_product
+      permission: CAN_QUERY
+
+  - name: genie-material-product
+    genie_space:
+      space_id: supplytics_material_product
+      permission: CAN_QUERY
+
+  # Neo4j secrets access
+  - name: neo4j-secrets
+    secret_scope:
+      scope: neo4j-secrets
+      permission: READ
+
+# Environment variables
+env:
+  - name: ENV
+    value: production
+  - name: DEBUG
+    value: "False"
+
+  # Multi-Agent Supervisor endpoint name
+  - name: MULTI_AGENT_ENDPOINT
+    value: mas-0ad68bad-endpoint
+
+  # Knowledge Assistant endpoint name
+  - name: KNOWLEDGE_ENDPOINT
+    value: ka-0445f231-endpoint
+
+  # Genie Space IDs
+  - name: GENIE_SPACE_GLOBAL_SUPPLY_CHAIN
+    value: supplytics_global_supply_chain
+
+  - name: GENIE_SPACE_SUPPLIER_MATERIAL
+    value: supplytics_supplier_material
+
+  - name: GENIE_SPACE_PRODUCT_CUSTOMER
+    value: supplytics_product_customer
+
+  - name: GENIE_SPACE_TARIFF_MATERIAL
+    value: supplytics_tariffmaterial_product
+
+  - name: GENIE_SPACE_MATERIAL_PRODUCT
+    value: supplytics_material_product
+
+  # Neo4j configuration
+  - name: NEO4J_PROJECT_ID
+    value: c140d01a-eba1-4360-937b-173fd661595d
+
+  # Note: DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET
+  # are automatically provided by Databricks Apps runtime
+  # Neo4j credentials are fetched from Databricks secrets (neo4j-secrets scope)
+
+# Application command
+command:
+  - /bin/bash
+  - -c
+  - |
+    pip install -r requirements.txt
+    uvicorn app:app --host 0.0.0.0 --port 8000
+
+# Health check
+health_check:
+  path: /api/health
+  port: 8000
+  interval: 30
+  timeout: 10
+
+# Networking
+networking:
+  ingress:
+    enabled: true
+    port: 8000

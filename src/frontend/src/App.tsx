@@ -10,6 +10,7 @@ import SupplierProduct from './pages/SupplierProduct'
 import SupplierTier from './pages/SupplierTier'
 import Recommendations from './pages/Recommendations'
 import ExecutiveBriefing from './pages/ExecutiveBriefing'
+import Neo4jGraph from './pages/Neo4jGraph'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="/supplier-tier" element={<SupplierTier />} />
           <Route path="/recommendations" element={<Recommendations />} />
           <Route path="/executive-briefing" element={<ExecutiveBriefing />} />
+          <Route path="/neo4j-graph" element={<Neo4jGraph />} />
         </Routes>
       </AnimatePresence>
     </Layout>
