@@ -1,9 +1,12 @@
 """Chat router - Multi-Agent Supervisor and Knowledge Assistant integration"""
 
 import os
+import json
+import asyncio
 from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, AsyncGenerator
 from services.multi_agent_service import MultiAgentService
 
 router = APIRouter()
@@ -58,6 +61,45 @@ async def chat_knowledge(request: ChatRequest, http_request: Request):
             "content": f"Knowledge search error: {str(e)}",
             "error": True
         }
+
+
+@router.post("/multi-agent/stream")
+async def chat_multi_agent_stream(request: ChatRequest, http_request: Request):
+    """
+    Stream Multi-Agent Supervisor response with real-time thinking updates.
+    Uses Server-Sent Events (SSE) to stream trace steps as they happen.
+    """
+    async def event_generator() -> AsyncGenerator[str, None]:
+        try:
+            messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+            # Stream events from the service
+            async for event in multi_agent_service.query_stream(
+                messages=messages,
+                max_tokens=request.max_tokens
+            ):
+                # Format as SSE
+                yield f"data: {json.dumps(event)}\n\n"
+
+            # Send done event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as e:
+            error_event = {
+                "type": "error",
+                "content": str(e)
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 
 @router.get("/config")

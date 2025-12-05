@@ -1,6 +1,5 @@
-"""Genie Spaces router - Natural language SQL queries"""
+"""Genie Spaces router - Natural language SQL queries with multiple space support"""
 
-import os
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
@@ -9,108 +8,133 @@ from services.genie_service import GenieService
 router = APIRouter()
 genie_service = GenieService()
 
-# Available Genie Spaces
-GENIE_SPACES = {
-    "global_supply_chain": "supplytics_global_supply_chain",
-    "supplier_material": "supplytics_supplier_material",
-    "product_customer": "supplytics_product_customer",
-    "tariff_material": "supplytics_tariffmaterial_product",
-    "material_product": "supplytics_material_product"
-}
+
+class GenieMessageRequest(BaseModel):
+    """Request to send a message to a Genie Space"""
+    message: str
+    space_key: str = "global_supply_chain"  # Default space
+    conversation_id: Optional[str] = None
 
 
 class GenieQueryRequest(BaseModel):
+    """Legacy query request for backward compatibility"""
     question: str
     max_results: Optional[int] = 100
 
 
 @router.get("/spaces")
 async def list_genie_spaces():
-    """List available Genie Spaces"""
-    return {
-        "spaces": [
-            {"id": k, "name": v, "description": get_space_description(k)}
-            for k, v in GENIE_SPACES.items()
-        ]
-    }
-
-
-@router.post("/{space_name}/query")
-async def query_genie_space(space_name: str, request: GenieQueryRequest):
     """
-    Query a specific Genie Space with natural language.
-    Returns SQL-generated results.
+    List available Genie Spaces.
+    Returns all configured spaces with their keys, names, and descriptions.
     """
-    if space_name not in GENIE_SPACES:
-        return {"error": f"Unknown Genie Space: {space_name}", "available": list(GENIE_SPACES.keys())}
-
-    try:
-        result = await genie_service.query(
-            space_id=GENIE_SPACES[space_name],
-            question=request.question,
-            max_results=request.max_results
-        )
-        return result
-    except Exception as e:
-        return {"error": str(e), "results": [], "sql": None}
+    spaces = genie_service.get_available_spaces()
+    return {
+        "status": "success",
+        "spaces": spaces
+    }
 
 
-@router.get("/{space_name}/info")
-async def get_space_info(space_name: str):
-    """Get information about a Genie Space"""
-    if space_name not in GENIE_SPACES:
-        return {"error": f"Unknown Genie Space: {space_name}"}
+@router.post("/send-message")
+async def send_genie_message(request: GenieMessageRequest):
+    """
+    Send a message to a Genie Space and get a response.
 
-    workspace_host = os.getenv("DATABRICKS_SERVER_HOSTNAME", "fe-vm-hls-amer.cloud.databricks.com")
+    - space_key: Which Genie Space to query (e.g., 'global_supply_chain', 'supplier_material')
+    - message: Natural language question
+    - conversation_id: Optional - continue an existing conversation
+
+    Returns:
+    - content: Genie's text response
+    - sql: Generated SQL query (if applicable)
+    - results: Query results with columns and rows
+    - conversation_id: ID for continuing the conversation
+    """
+    result = await genie_service.send_message(
+        space_key=request.space_key,
+        message=request.message,
+        conversation_id=request.conversation_id
+    )
+    return result
+
+
+@router.get("/{space_key}/info")
+async def get_space_info(space_key: str):
+    """Get information about a specific Genie Space"""
+    spaces = genie_service.get_available_spaces()
+    space = next((s for s in spaces if s["key"] == space_key), None)
+
+    if not space:
+        return {
+            "status": "error",
+            "error": f"Unknown Genie Space: {space_key}",
+            "available_spaces": [s["key"] for s in spaces]
+        }
+
+    sample_questions = get_sample_questions(space_key)
 
     return {
-        "id": space_name,
-        "genie_space_id": GENIE_SPACES[space_name],
-        "description": get_space_description(space_name),
-        "url": f"https://{workspace_host}/sql/genie/{GENIE_SPACES[space_name]}",
-        "sample_questions": get_sample_questions(space_name)
+        "status": "success",
+        "space": space,
+        "sample_questions": sample_questions
     }
 
 
-def get_space_description(space_name: str) -> str:
-    """Get description for a Genie Space"""
-    descriptions = {
-        "global_supply_chain": "End-to-end supply chain visibility and analytics",
-        "supplier_material": "Supplier-material relationships and risk analysis",
-        "product_customer": "Product demand patterns and customer analytics",
-        "tariff_material": "Tariff exposure and impact analysis",
-        "material_product": "Bill of materials and product composition"
+@router.post("/{space_key}/query")
+async def query_genie_space(space_key: str, request: GenieQueryRequest):
+    """
+    Legacy endpoint for querying a specific Genie Space.
+    Use /send-message for new implementations.
+    """
+    result = await genie_service.send_message(
+        space_key=space_key,
+        message=request.question,
+        conversation_id=None  # Always new conversation for legacy endpoint
+    )
+
+    # Transform to legacy response format
+    return {
+        "question": request.question,
+        "space_id": space_key,
+        "sql": result.get("sql"),
+        "results": result.get("results", {}).get("rows", []) if result.get("results") else [],
+        "columns": [c["name"] for c in result.get("results", {}).get("columns", [])] if result.get("results") else [],
+        "message": result.get("content")
     }
-    return descriptions.get(space_name, "Supply chain analytics")
 
 
-def get_sample_questions(space_name: str) -> list:
+def get_sample_questions(space_key: str) -> list:
     """Get sample questions for a Genie Space"""
     samples = {
         "global_supply_chain": [
             "What is our overall supply chain resiliency score?",
             "Show me suppliers with the highest risk",
-            "Which materials are single-sourced?"
+            "Which materials are single-sourced?",
+            "What are the biggest supply chain bottlenecks?"
         ],
         "supplier_material": [
             "Which suppliers provide the most critical materials?",
             "Show suppliers by geographic region",
-            "What is the lead time distribution?"
+            "What is the lead time distribution?",
+            "Which suppliers have quality issues?"
         ],
         "product_customer": [
             "What products have the highest demand?",
             "Show customer concentration by region",
-            "Which products are at risk due to supply issues?"
+            "Which products are at risk due to supply issues?",
+            "What is our revenue concentration by customer?"
         ],
         "tariff_material": [
             "What is our total tariff exposure?",
             "Which materials have the highest tariff rates?",
-            "Show tariff impact by country of origin"
+            "Show tariff impact by country of origin",
+            "What products are most affected by tariffs?"
         ],
         "material_product": [
             "What materials are used in the most products?",
             "Show BOM depth analysis",
-            "Which materials have no alternatives?"
+            "Which materials have no alternatives?",
+            "What is the material commonality across products?"
         ]
     }
-    return samples.get(space_name, [])
+    return samples.get(space_key, [])
