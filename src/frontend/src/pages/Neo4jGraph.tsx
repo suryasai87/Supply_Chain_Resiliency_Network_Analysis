@@ -8,13 +8,12 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
-  Settings,
-  Play,
   Loader2,
   Copy,
   Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Neo4jGraphView from '@/components/graphs/Neo4jGraphView'
 
 interface Neo4jInstance {
   id: string
@@ -47,9 +46,8 @@ export default function Neo4jGraph() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
   const [neodashConfig, setNeodashConfig] = useState<NeoDashConfig | null>(null)
   const [loading, setLoading] = useState(true)
-  const [neodashUrl, setNeodashUrl] = useState<string>('')
-  const [iframeLoading, setIframeLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Fetch Neo4j connection status
   useEffect(() => {
@@ -58,8 +56,8 @@ export default function Neo4jGraph() {
 
   const fetchNeo4jStatus = async () => {
     setLoading(true)
+    setError(null)
     try {
-      // Fetch both status and neodash config
       const [statusRes, configRes] = await Promise.all([
         fetch('/api/neo4j/status'),
         fetch('/api/neo4j/neodash-config')
@@ -70,70 +68,23 @@ export default function Neo4jGraph() {
 
       setConnectionStatus(statusData)
       setNeodashConfig(configData)
-
-      // If configured, auto-launch NeoDash
-      if (configData.configured && configData.host) {
-        buildNeoDashUrl(configData)
-      }
-    } catch (error) {
+    } catch (err) {
       setConnectionStatus({
         connected: false,
         message: 'Failed to connect to Neo4j API'
       })
+      setError('Failed to fetch connection status')
     } finally {
       setLoading(false)
     }
   }
 
-  const buildNeoDashUrl = (config: NeoDashConfig) => {
-    if (!config.configured || !config.host) return
-
-    // NeoDash standalone with connection parameters
-    // Format: https://neodash.graphapp.io/?share&standalone=true&connection=...
-    // The connection is base64 encoded JSON
-    const connectionConfig = {
-      protocol: config.protocol || 'neo4j+s',
-      url: config.host,
-      port: config.port || 7687,
-      database: config.database || 'neo4j',
-      username: config.username,
-      password: config.password
-    }
-
-    // Base64 encode the connection config
-    const encodedConnection = btoa(JSON.stringify(connectionConfig))
-
-    // Build NeoDash URL with auto-connect
-    const url = `https://neodash.graphapp.io/?share&standalone=true&connection=${encodedConnection}`
-    setNeodashUrl(url)
-    setIframeLoading(true)
-  }
-
   const handleRefresh = () => {
-    setNeodashUrl('')
     fetchNeo4jStatus()
-  }
-
-  const handleLaunchNeoDash = () => {
-    if (neodashConfig?.configured) {
-      buildNeoDashUrl(neodashConfig)
-    } else {
-      // Open NeoDash without auto-connect
-      setNeodashUrl('https://neodash.graphapp.io/')
-      setIframeLoading(true)
-    }
   }
 
   const handleOpenNeo4jConsole = () => {
     window.open('https://console.neo4j.io', '_blank')
-  }
-
-  const handleOpenNeoDashNewTab = () => {
-    if (neodashUrl) {
-      window.open(neodashUrl, '_blank')
-    } else {
-      window.open('https://neodash.graphapp.io/', '_blank')
-    }
   }
 
   const copyConnectionString = async () => {
@@ -144,15 +95,19 @@ export default function Neo4jGraph() {
     }
   }
 
+  const handleGraphError = (errorMsg: string) => {
+    setError(errorMsg)
+  }
+
   return (
     <motion.div
-      className="space-y-6"
+      className="space-y-4 h-full flex flex-col"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
@@ -161,7 +116,7 @@ export default function Neo4jGraph() {
             Neo4j Graph Explorer
           </h1>
           <p className="text-muted-foreground mt-1">
-            Explore supply chain relationships using Neo4j graph database and NeoDash visualizations
+            Query and visualize your Neo4j graph database
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -182,42 +137,40 @@ export default function Neo4jGraph() {
         </div>
       </div>
 
-      {/* Connection Status & Instance Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Connection Status Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-shrink-0">
         {/* Connection Status Card */}
         <motion.div
-          className="p-6 rounded-xl bg-card border border-border"
+          className="p-4 rounded-xl bg-card border border-border"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
               <Server className="w-4 h-4 text-muted-foreground" />
-              Connection Status
+              Connection
             </h3>
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             ) : connectionStatus?.connected ? (
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-500" />
+              <AlertCircle className="w-4 h-4 text-red-500" />
             )}
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <span>Checking Neo4j connection...</span>
-            </div>
+            <span className="text-sm text-muted-foreground">Connecting...</span>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className={cn(
                 "text-sm font-medium",
                 connectionStatus?.connected ? "text-green-500" : "text-red-500"
               )}>
                 {connectionStatus?.connected ? 'Connected' : 'Disconnected'}
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground truncate">
                 {connectionStatus?.message || 'Neo4j Aura'}
               </p>
             </div>
@@ -226,45 +179,38 @@ export default function Neo4jGraph() {
 
         {/* Instance Info Card */}
         <motion.div
-          className="p-6 rounded-xl bg-card border border-border"
+          className="p-4 rounded-xl bg-card border border-border"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
               <Activity className="w-4 h-4 text-muted-foreground" />
-              Instance Details
+              Instance
             </h3>
           </div>
 
           {connectionStatus?.instance ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Name</span>
-                <span className="text-sm font-medium text-foreground">{connectionStatus.instance.name}</span>
+                <span className="text-xs text-muted-foreground">Name</span>
+                <span className="text-xs font-medium text-foreground">{connectionStatus.instance.name}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status</span>
-                <span className={cn(
-                  "text-sm font-medium px-2 py-0.5 rounded-full",
-                  connectionStatus.instance.status === 'running' ? "bg-green-500/10 text-green-500" : "bg-amber-500/10 text-amber-500"
-                )}>
-                  {connectionStatus.instance.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Database</span>
-                <span className="text-sm font-medium text-foreground">{connectionStatus.instance.database}</span>
+                <span className="text-xs text-muted-foreground">Database</span>
+                <span className="text-xs font-medium text-foreground">{connectionStatus.instance.database}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">Host</span>
+                <span className="text-xs text-muted-foreground">Host</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-sm font-medium text-foreground truncate max-w-[120px]">{connectionStatus.instance.host}</span>
+                  <span className="text-xs font-medium text-foreground truncate max-w-[100px]">
+                    {connectionStatus.instance.host}
+                  </span>
                   <button
                     onClick={copyConnectionString}
-                    className="p-1 hover:bg-accent rounded transition-colors"
-                    title="Copy connection URI"
+                    className="p-0.5 hover:bg-accent rounded transition-colors"
+                    title="Copy URI"
                   >
                     {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
                   </button>
@@ -272,144 +218,58 @@ export default function Neo4jGraph() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {loading ? 'Loading instance details...' : 'No instance configured'}
+            <p className="text-xs text-muted-foreground">
+              {loading ? 'Loading...' : 'Not configured'}
             </p>
           )}
         </motion.div>
 
-        {/* Quick Actions Card */}
+        {/* Status Card */}
         <motion.div
-          className="p-6 rounded-xl bg-card border border-border"
+          className="p-4 rounded-xl bg-card border border-border"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground flex items-center gap-2">
-              <Settings className="w-4 h-4 text-muted-foreground" />
-              Quick Actions
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-sm">
+              <Database className="w-4 h-4 text-muted-foreground" />
+              Status
             </h3>
           </div>
 
-          <div className="space-y-2">
-            <button
-              onClick={handleLaunchNeoDash}
-              disabled={!connectionStatus?.connected}
-              className={cn(
-                "w-full flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border",
-                connectionStatus?.connected
-                  ? "bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20"
-                  : "bg-muted text-muted-foreground border-border cursor-not-allowed"
-              )}
-            >
-              <Play className="w-4 h-4" />
-              {neodashUrl ? 'Reconnect NeoDash' : 'Launch NeoDash'}
-            </button>
-            <button
-              onClick={handleOpenNeoDashNewTab}
-              className="w-full flex items-center gap-2 px-4 py-2 rounded-lg bg-background border border-border hover:bg-accent transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open in New Tab
-            </button>
-          </div>
+          {error ? (
+            <div className="text-xs text-red-500">{error}</div>
+          ) : connectionStatus?.connected ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs text-green-500">Ready to query</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter a Cypher query below to explore your graph
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Configure Neo4j credentials to enable queries
+            </p>
+          )}
         </motion.div>
       </div>
 
-      {/* NeoDash iFrame */}
+      {/* Graph Visualization */}
       <motion.div
-        className="rounded-xl bg-card border border-border overflow-hidden"
+        className="flex-1 rounded-xl bg-card border border-border overflow-hidden min-h-[500px]"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <div className="flex items-center justify-between p-4 border-b border-border bg-background/50">
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <Database className="w-5 h-5 text-green-500" />
-            NeoDash Graph Visualization
-          </h2>
-          <div className="flex items-center gap-2">
-            {iframeLoading && (
-              <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading NeoDash...
-              </span>
-            )}
-            {neodashConfig?.configured && (
-              <span className="text-xs text-green-500 bg-green-500/10 px-2 py-1 rounded-full">
-                Auto-connected
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="relative" style={{ height: 'calc(100vh - 420px)', minHeight: '500px' }}>
-          {neodashUrl ? (
-            <iframe
-              src={neodashUrl}
-              className="w-full h-full border-0"
-              title="NeoDash Graph Visualization"
-              onLoad={() => setIframeLoading(false)}
-              allow="clipboard-write"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full bg-background">
-              <div className="text-center">
-                <Database className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
-                <h3 className="text-lg font-medium text-foreground mb-2">
-                  {connectionStatus?.connected ? 'Ready to Explore' : 'Connect to Neo4j'}
-                </h3>
-                <p className="text-muted-foreground mb-4 max-w-md">
-                  {connectionStatus?.connected
-                    ? `Connected to ${connectionStatus.instance?.name || 'Neo4j'}. Click "Launch NeoDash" to start exploring your graph data.`
-                    : 'Configure your Neo4j credentials to enable graph visualization.'
-                  }
-                </p>
-                {connectionStatus?.connected && (
-                  <button
-                    onClick={handleLaunchNeoDash}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
-                  >
-                    <Play className="w-5 h-5" />
-                    Launch NeoDash
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <Neo4jGraphView
+          config={neodashConfig}
+          onError={handleGraphError}
+        />
       </motion.div>
-
-      {/* Connection Info */}
-      {connectionStatus?.connected && connectionStatus.instance && (
-        <motion.div
-          className="rounded-xl bg-card border border-border p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <h3 className="font-semibold text-foreground mb-4">Connection Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-3 rounded-lg bg-background border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Connection URI</p>
-              <p className="text-sm font-mono text-foreground truncate">{connectionStatus.instance.uri}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-background border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Database</p>
-              <p className="text-sm font-medium text-foreground">{connectionStatus.instance.database}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-background border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Instance ID</p>
-              <p className="text-sm font-mono text-foreground">{connectionStatus.instance.id}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-background border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Status</p>
-              <p className="text-sm font-medium text-green-500">{connectionStatus.instance.status}</p>
-            </div>
-          </div>
-        </motion.div>
-      )}
     </motion.div>
   )
 }
